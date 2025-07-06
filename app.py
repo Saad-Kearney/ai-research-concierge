@@ -5,9 +5,11 @@ from dotenv import load_dotenv
 from docx import Document
 from io import BytesIO
 
-# Load Together API key
+# Load local .env (if exists)
 load_dotenv()
-together_api_key = os.getenv("TOGETHER_API_KEY")
+
+# Use local .env OR cloud secret
+together_api_key = os.getenv("TOGETHER_API_KEY") or st.secrets["TOGETHER_API_KEY"]
 
 API_URL = "https://api.together.xyz/v1/chat/completions"
 HEADERS = {
@@ -18,7 +20,7 @@ HEADERS = {
 # Page config
 st.set_page_config(page_title="ARC – AI Research Concierge", layout="wide")
 
-# Brand header + logo
+# Header
 col1, col2 = st.columns([5, 1])
 with col1:
     st.markdown(
@@ -34,7 +36,7 @@ with col1:
 with col2:
     st.image("kearney_logo.png", width=200)
 
-# Input + model selection
+# Topic + model
 col1, col2 = st.columns([4, 1])
 with col1:
     if "topic" not in st.session_state:
@@ -55,11 +57,11 @@ with col2:
 
 MODEL = model_option
 
-# Button to generate insights
+# Generate
 if st.session_state.topic and "summary" not in st.session_state and st.button("Generate Insights"):
     with st.spinner("Thinking like a consultant..."):
 
-        # Get Suggested Sources
+        # SOURCES
         prompt_sources = f"List 10 reliable sources or publication types to study the topic: {st.session_state.topic}"
         sources_body = {
             "model": MODEL,
@@ -67,10 +69,10 @@ if st.session_state.topic and "summary" not in st.session_state and st.button("G
             "temperature": 0.3,
             "messages": [{"role": "user", "content": prompt_sources}]
         }
-        response_sources = requests.post(API_URL, headers=HEADERS, json=sources_body)
-        st.session_state.sources = response_sources.json()['choices'][0]['message']['content'].strip()
+        r_sources = requests.post(API_URL, headers=HEADERS, json=sources_body)
+        st.session_state.sources = r_sources.json()['choices'][0]['message']['content'].strip()
 
-        # Get Summary
+        # SUMMARY
         prompt_summary = f"Summarize the key insights about: {st.session_state.topic} for a consulting analyst."
         summary_body = {
             "model": MODEL,
@@ -78,10 +80,10 @@ if st.session_state.topic and "summary" not in st.session_state and st.button("G
             "temperature": 0.3,
             "messages": [{"role": "user", "content": prompt_summary}]
         }
-        response_summary = requests.post(API_URL, headers=HEADERS, json=summary_body)
-        st.session_state.summary = response_summary.json()['choices'][0]['message']['content'].strip()
+        r_summary = requests.post(API_URL, headers=HEADERS, json=summary_body)
+        st.session_state.summary = r_summary.json()['choices'][0]['message']['content'].strip()
 
-        # Get PoV Structure
+        # POV
         prompt_pov = (
             f"As a strategy consultant, outline a slide-by-slide Point-of-View deck on the topic: "
             f"'{st.session_state.topic}'. Include slide titles and key content for each."
@@ -92,10 +94,10 @@ if st.session_state.topic and "summary" not in st.session_state and st.button("G
             "temperature": 0.3,
             "messages": [{"role": "user", "content": prompt_pov}]
         }
-        response_pov = requests.post(API_URL, headers=HEADERS, json=pov_body)
-        st.session_state.pov = response_pov.json()['choices'][0]['message']['content'].strip()
+        r_pov = requests.post(API_URL, headers=HEADERS, json=pov_body)
+        st.session_state.pov = r_pov.json()['choices'][0]['message']['content'].strip()
 
-# DISPLAY ONLY IF GENERATED
+# Display
 if "summary" in st.session_state and "sources" in st.session_state and "pov" in st.session_state:
     st.markdown("<h2 style='color:#7823DC;'>🔗 Suggested Sources</h2>", unsafe_allow_html=True)
     st.write(st.session_state.sources)
@@ -106,10 +108,10 @@ if "summary" in st.session_state and "sources" in st.session_state and "pov" in 
     st.markdown("<h2 style='color:#7823DC;'>📊 Point-of-View Structure</h2>", unsafe_allow_html=True)
     st.write(st.session_state.pov)
 
-    # Export Word doc
+    # Export Word
     st.markdown("<h2 style='color:#7823DC;'>⬇️ Export Report</h2>", unsafe_allow_html=True)
     doc = Document()
-    doc.add_heading(f"AI Research Concierge Report", level=1)
+    doc.add_heading("AI Research Concierge Report", level=1)
     doc.add_paragraph(f"Topic: {st.session_state.topic}")
     doc.add_heading("Suggested Sources", level=2)
     doc.add_paragraph(st.session_state.sources)
@@ -129,7 +131,7 @@ if "summary" in st.session_state and "sources" in st.session_state and "pov" in 
         mime="application/vnd.openxmlformats-officedocument.wordprocessingml.document"
     )
 
-    # Reset button at the very end
+    # Reset
     st.markdown("<br>", unsafe_allow_html=True)
     if st.button("🔄 Explore another topic"):
         for key in ["topic", "summary", "sources", "pov"]:
