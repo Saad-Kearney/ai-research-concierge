@@ -5,10 +5,8 @@ from dotenv import load_dotenv
 from docx import Document
 from io import BytesIO
 
-# Load local .env (if exists)
+# Load environment variables
 load_dotenv()
-
-# Use local .env OR cloud secret
 together_api_key = os.getenv("TOGETHER_API_KEY") or st.secrets["TOGETHER_API_KEY"]
 
 API_URL = "https://api.together.xyz/v1/chat/completions"
@@ -17,7 +15,6 @@ HEADERS = {
     "Content-Type": "application/json"
 }
 
-# Page config
 st.set_page_config(page_title="ARC – AI Research Concierge", layout="wide")
 
 # Header
@@ -28,7 +25,7 @@ with col1:
         <h1 style='color:#7823DC;'>Welcome to ARC – AI Research Concierge</h1>
         <h4 style='color:#7823DC; margin-top:-10px;'>by KEARNEY</h4>
         <p style='font-size:16px;'>
-            <i>Your personal AI assistant for generating consulting-grade slide structures and Point-of-View (PoV) outlines – faster, smarter, and more structured.</i>
+            <i>Your personal AI assistant for generating consulting-grade slide structures and Point-of-View (PoV) or Thought Leadership outlines – faster, smarter, and more structured.</i>
         </p>
         """,
         unsafe_allow_html=True
@@ -36,17 +33,24 @@ with col1:
 with col2:
     st.image("kearney_logo.png", width=200)
 
-# Topic + model
+# Goal selection
+goal = st.radio(
+    "What would you like to generate?",
+    ["PoV Structure", "Thought Leadership Structure"],
+    index=0
+)
+
+# Topic input + model selector
 col1, col2 = st.columns([4, 1])
 with col1:
     if "topic" not in st.session_state:
         st.session_state.topic = ""
 
     if st.session_state.topic == "":
-        st.markdown("<p style='font-weight:bold; font-size:18px;'>Enter a research topic</p>", unsafe_allow_html=True)
+        st.markdown("<p style='font-weight:bold; font-size:18px;'>Enter the topic</p>", unsafe_allow_html=True)
         st.session_state.topic = st.text_input("", placeholder="e.g., Future of AI in retail banking")
     else:
-        st.text_input("Enter a research topic", value=st.session_state.topic, disabled=True)
+        st.text_input("Enter the topic", value=st.session_state.topic, disabled=True)
 
 with col2:
     model_option = st.selectbox("Choose model", [
@@ -59,10 +63,10 @@ MODEL = model_option
 
 # Generate
 if st.session_state.topic and "summary" not in st.session_state and st.button("Generate Insights"):
-    with st.spinner("Thinking like a consultant..."):
+    with st.spinner("🧠 Your Kearney AI is thinking..."):
 
-        # SOURCES
-        prompt_sources = f"List 10 reliable sources or publication types to study the topic: {st.session_state.topic}"
+        # Suggested Sources
+        prompt_sources = f"List 10 reliable source names or publication types (no links) to study the topic: {st.session_state.topic}"
         sources_body = {
             "model": MODEL,
             "max_tokens": 1000,
@@ -72,7 +76,7 @@ if st.session_state.topic and "summary" not in st.session_state and st.button("G
         r_sources = requests.post(API_URL, headers=HEADERS, json=sources_body)
         st.session_state.sources = r_sources.json()['choices'][0]['message']['content'].strip()
 
-        # SUMMARY
+        # Summary
         prompt_summary = f"Summarize the key insights about: {st.session_state.topic} for a consulting analyst."
         summary_body = {
             "model": MODEL,
@@ -83,14 +87,52 @@ if st.session_state.topic and "summary" not in st.session_state and st.button("G
         r_summary = requests.post(API_URL, headers=HEADERS, json=summary_body)
         st.session_state.summary = r_summary.json()['choices'][0]['message']['content'].strip()
 
-        # POV
-        prompt_pov = (
-            f"As a strategy consultant, outline a slide-by-slide Point-of-View deck on the topic: "
-            f"'{st.session_state.topic}'. Include slide titles and key content for each."
-        )
+        # PoV or Thought Leadership
+        if goal == "PoV Structure":
+            prompt_pov = f"""
+You are a strategy consultant at Kearney creating a slide-based Point-of-View on the topic: "{st.session_state.topic}".
+
+Suggest a compelling PoV title first.
+
+Follow this 8-part structure and include slide numbers:
+1. Executive Context / Why this matters
+2. Key Challenges / Gaps
+3. Market Forces / Drivers of Change
+4. Strategic Options / Pathways
+5. Kearney's Point of View / Recommendation
+6. How to Make It Happen / Enablers
+7. Next Steps / Roadmap
+8. Why Kearney (credentials, experience, assets)
+
+For each slide:
+- Start with: Slide [#]: [Title]
+- Include 3–5 bullet points
+- Suggest sources by name only (e.g., McKinsey, IEA, OECD)
+
+Use concise consulting language. Output in markdown format.
+"""
+        else:
+            prompt_pov = f"""
+You are a strategy consultant at Kearney writing a thought leadership article on the topic: "{st.session_state.topic}".
+
+Suggest a compelling article title first.
+
+Follow this 7-part structure:
+1. Executive Summary / Why this matters
+2. Sector Context / What’s happening now
+3. Deeper Diagnostic / What’s broken
+4. What Good Looks Like / The Opportunity
+5. Strategic Levers / What to Do
+6. Implications for Leaders / Who should act
+7. Conclusion / Call to Action
+
+Use clear, persuasive business writing. Be factual, bold, and structured.
+Output in markdown format.
+"""
+
         pov_body = {
             "model": MODEL,
-            "max_tokens": 1000,
+            "max_tokens": 1200,
             "temperature": 0.3,
             "messages": [{"role": "user", "content": prompt_pov}]
         }
@@ -105,10 +147,10 @@ if "summary" in st.session_state and "sources" in st.session_state and "pov" in 
     st.markdown("<h2 style='color:#7823DC;'>📄 Summary</h2>", unsafe_allow_html=True)
     st.write(st.session_state.summary)
 
-    st.markdown("<h2 style='color:#7823DC;'>📊 Point-of-View Structure</h2>", unsafe_allow_html=True)
+    st.markdown(f"<h2 style='color:#7823DC;'>📊 {goal}</h2>", unsafe_allow_html=True)
     st.write(st.session_state.pov)
 
-    # Export Word
+    # Export to Word
     st.markdown("<h2 style='color:#7823DC;'>⬇️ Export Report</h2>", unsafe_allow_html=True)
     doc = Document()
     doc.add_heading("AI Research Concierge Report", level=1)
@@ -117,7 +159,7 @@ if "summary" in st.session_state and "sources" in st.session_state and "pov" in 
     doc.add_paragraph(st.session_state.sources)
     doc.add_heading("Summary", level=2)
     doc.add_paragraph(st.session_state.summary)
-    doc.add_heading("Point-of-View Structure", level=2)
+    doc.add_heading(goal, level=2)
     doc.add_paragraph(st.session_state.pov)
 
     buffer = BytesIO()
@@ -131,8 +173,6 @@ if "summary" in st.session_state and "sources" in st.session_state and "pov" in 
         mime="application/vnd.openxmlformats-officedocument.wordprocessingml.document"
     )
 
-    # Reset
-    st.markdown("<br>", unsafe_allow_html=True)
     if st.button("🔄 Explore another topic"):
         for key in ["topic", "summary", "sources", "pov"]:
             st.session_state.pop(key, None)
